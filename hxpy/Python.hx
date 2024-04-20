@@ -46,6 +46,11 @@ extern class Python
 	static var RELEASE_SERIAL:String;
 
     /**
+     * Current Python state
+     */
+    static var STATE:Dynamic;
+
+    /**
     *Function for tracing the Python copyright information.
     */
     @:native("Py_GetCopyright")
@@ -72,6 +77,16 @@ extern class Python
       @:privateAccess
       PythonFile.runSimpleFile(filetoParse);
   	}
+    
+     /**
+      * Calls a defined Python function without arguments from a script
+      * @param funcName Function to call (eg: 'def foo(): print("Hi!")' -> Python.callFunction("foo"))
+      */
+     //@:native("PyObject_CallFunction")
+     private static inline function callFunction(funcName:String):Void {
+        @:privateAccess
+        PythonHelper.callFunction(funcName);
+     }
 		
     /**
     *Function for closing a Python instance.
@@ -114,4 +129,19 @@ class PythonFile {
     		} 
 		');
 	}
+}
+
+@:cppFileCode('
+#include <Python.h>
+#include <string>
+#include <iostream>
+using std::string;
+using namespace std;')
+@:keep
+class PythonHelper
+{
+    private static function callFunction(funcName:String)
+    {
+        //Work in Progress
+    }
 }
