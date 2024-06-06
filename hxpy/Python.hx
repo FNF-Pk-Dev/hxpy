@@ -135,13 +135,64 @@ class PythonFile {
 #include <Python.h>
 #include <string>
 #include <iostream>
+#include <vector>
 using std::string;
-using namespace std;')
+using std::vector;
+using namespace std;
+')
 @:keep
 class PythonHelper
 {
-    private static function callFunction(funcName:String)
-    {
-        //Work in Progress
+    public static function callFunction(moduleName:String, funcName:String, ?parameters:Array<String>):Dynamic {
+        var result:Dynamic = null;
+        untyped __cpp__('
+            PyObject *pName, *pModule, *pFunc, *pArgs, *pValue;
+            vector<string> argsVec = {2};
+            pModule = PyImport_ImportModule({0});
+            if (!pModule) {
+                PyErr_Print();
+                std::cerr << "Failed to load module " << {0} << std::endl;
+                return null;
+            }
+
+            pFunc = PyObject_GetAttrString(pModule, {1});
+            if (!pFunc || !PyCallable_Check(pFunc)) {
+                if (PyErr_Occurred())
+                    PyErr_Print();
+                std::cerr << "Cannot find or call function " << {1} << std::endl;
+                Py_XDECREF(pFunc);
+                Py_DECREF(pModule);
+                return null;
+            }
+
+            pArgs = PyTuple_New(argsVec.size());
+            for (size_t i = 0; i < argsVec.size(); ++i) {
+                PyObject* pValue = PyUnicode_FromString(argsVec[i].c_str());
+                if (!pValue) {
+                    Py_DECREF(pArgs);
+                    Py_DECREF(pModule);
+                    PyErr_Print();
+                    std::cerr << "Failed to convert argument" << std::endl;
+                    return null;
+                }
+                PyTuple_SetItem(pArgs, i, pValue);
+            }
+
+            pValue = PyObject_CallObject(pFunc, pArgs);
+            Py_DECREF(pArgs);
+
+            if (pValue != NULL) {
+                std::cout << "Function call successful." << std::endl;
+                // Handle the result
+                Py_DECREF(pValue);
+            } else {
+                PyErr_Print();
+                std::cerr << "Call failed" << std::endl;
+            }
+
+            Py_XDECREF(pFunc);
+            Py_DECREF(pModule);
+        ', moduleName, funcName, parameters);
+        return result;
     }
 }
