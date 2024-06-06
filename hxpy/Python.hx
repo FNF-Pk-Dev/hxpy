@@ -141,21 +141,22 @@ using std::vector;
 using namespace std;
 ')
 @:keep
-class PythonHelper
-{
-    public static function callFunction(moduleName:String, funcName:String, ?parameters:Array<String>):Dynamic {
+class PythonHelper {
+    public static var callbacks:Map<String, Dynamic> = new Map();
+
+    public static function callFunction(moduleName:String, funcName:String, parameters:Array<String>):Dynamic {
         var result:Dynamic = null;
         untyped __cpp__('
             PyObject *pName, *pModule, *pFunc, *pArgs, *pValue;
-            vector<string> argsVec = {2};
-            pModule = PyImport_ImportModule({0});
+            vector<string> argsVec({2}.begin(), {2}.end());
+            pModule = PyImport_ImportModule({0}.c_str());
             if (!pModule) {
                 PyErr_Print();
                 std::cerr << "Failed to load module " << {0} << std::endl;
                 return null;
             }
 
-            pFunc = PyObject_GetAttrString(pModule, {1});
+            pFunc = PyObject_GetAttrString(pModule, {1}.c_str());
             if (!pFunc || !PyCallable_Check(pFunc)) {
                 if (PyErr_Occurred())
                     PyErr_Print();
@@ -194,5 +195,52 @@ class PythonHelper
             Py_DECREF(pModule);
         ', moduleName, funcName, parameters);
         return result;
+    }
+
+    public static inline function add_callback(l:Dynamic, fname:String, f:Dynamic):Bool {
+        callbacks.set(fname, f);
+        untyped __cpp__('
+            PyObject *pName, *pModule, *pFunc;
+            pModule = PyImport_ImportModule("callback_manager");
+            if (!pModule) {
+                PyErr_Print();
+                std::cerr << "Failed to load callback_manager module" << std::endl;
+                return false;
+            }
+
+            pFunc = PyObject_GetAttrString(pModule, "add_callback");
+            if (!pFunc || !PyCallable_Check(pFunc)) {
+                if (PyErr_Occurred())
+                    PyErr_Print();
+                std::cerr << "Cannot find or call function add_callback" << std::endl;
+                Py_XDECREF(pFunc);
+                Py_DECREF(pModule);
+                return false;
+            }
+
+            PyObject *pArgs = PyTuple_New(2);
+            PyObject *pFname = PyUnicode_FromString({0}.c_str());
+            PyObject *pCallback = PyLong_FromVoidPtr((void*){1});
+            PyTuple_SetItem(pArgs, 0, pFname);
+            PyTuple_SetItem(pArgs, 1, pCallback);
+
+            PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
+            Py_DECREF(pArgs);
+
+            if (pValue != NULL) {
+                std::cout << "Callback registered successfully." << std::endl;
+                Py_DECREF(pValue);
+            } else {
+                PyErr_Print();
+                std::cerr << "Callback registration failed" << std::endl;
+                Py_XDECREF(pFunc);
+                Py_DECREF(pModule);
+                return false;
+            }
+
+            Py_XDECREF(pFunc);
+            Py_DECREF(pModule);
+        ', fname, f);
+        return true;
     }
 }
